@@ -1,0 +1,57 @@
+/* ==========================================================================
+   Responsive breakpoints — 320 / 360 / 390 / 412 / 768
+   ========================================================================== */
+
+/* Extra small phones (~320px) */
+@media (max-width: 340px) {
+  :root { --space-4: 12px; --space-5: 18px; }
+  .app-topbar h1 { font-size: var(--fs-xl); }
+  .cover-art { width: 68vw; height: 68vw; }
+  .fp-controls { padding: var(--space-4) var(--space-3); }
+  .play-btn-lg { width: 58px; height: 58px; }
+  .playlist-grid { gap: var(--space-2); }
+  .sort-bar { flex-wrap: wrap; justify-content: space-between; }
+  .sort-bar select { max-width: 60vw; }
+}
+
+/* Small phones (~360px) */
+@media (min-width: 341px) and (max-width: 380px) {
+  .cover-art { width: 70vw; height: 70vw; }
+}
+
+/* Standard phones (~390 / 412px) already covered by base styles */
+
+/* Tablet / large (768px+) */
+@media (min-width: 600px) {
+  #app-shell {
+    max-width: 560px;
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+  }
+  .playlist-grid { grid-template-columns: repeat(3, 1fr); }
+  .cover-art { width: min(50vw, 320px); height: min(50vw, 320px); }
+}
+
+@media (min-width: 768px) {
+  body { background: var(--color-bg-elevated); }
+  #app-shell {
+    box-shadow: var(--shadow-float);
+    min-height: 100vh;
+  }
+  #bottom-nav, #mini-player { max-width: 560px; }
+}
+
+/* Short viewports: shrink full-player vertical rhythm */
+@media (max-height: 640px) {
+  .fp-cover-wrap { padding: var(--space-3) var(--space-6); }
+  .cover-art { width: 46vw; height: 46vw; }
+  .fp-controls { padding: var(--space-4) var(--space-5); }
+}
+
+/* Landscape phones */
+@media (orientation: landscape) and (max-height: 480px) {
+  .full-player { flex-direction: row; flex-wrap: wrap; overflow-y: auto; }
+  .fp-cover-wrap { width: 40%; padding: var(--space-3); }
+  .cover-art { width: 100%; height: auto; aspect-ratio: 1; }
+  .fp-info, .fp-progress, .fp-controls, .fp-bottom-actions { width: 60%; }
+}

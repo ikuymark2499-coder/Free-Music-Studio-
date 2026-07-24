@@ -1,0 +1,112 @@
+/* ==========================================================================
+   Animations — page transitions, player motion, micro-interactions
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUpIn {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheetDown {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--color-accent-rgb), 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(var(--color-accent-rgb), 0); }
+}
+
+@keyframes ripple {
+  from { transform: scale(0); opacity: 0.35; }
+  to { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes skeletonShimmer {
+  0% { background-position: -160px 0; }
+  100% { background-position: 160px 0; }
+}
+
+@keyframes barBounce {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+.page-enter {
+  animation: fadeIn var(--dur-base) var(--ease-standard);
+}
+
+.card-enter {
+  animation: slideUpIn var(--dur-base) var(--ease-spring) backwards;
+}
+
+.full-player.is-open {
+  animation: sheetUp var(--dur-slow) var(--ease-spring);
+}
+
+.full-player.is-closing {
+  animation: sheetDown var(--dur-base) var(--ease-standard);
+}
+
+.cover-art.is-playing {
+  animation: spinSlow 18s linear infinite;
+}
+
+.fav-btn.is-active {
+  animation: pulseGlow 900ms var(--ease-standard);
+}
+
+.ripple-surface {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transform: scale(0);
+  pointer-events: none;
+  animation: ripple 550ms var(--ease-standard);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-card) 25%, var(--color-card-hover) 37%, var(--color-card) 63%);
+  background-size: 400px 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
+.eq-bars span {
+  display: inline-block;
+  width: 3px;
+  height: 100%;
+  margin-right: 2px;
+  background: currentColor;
+  animation: barBounce 900ms ease-in-out infinite;
+}
+.eq-bars span:nth-child(2) { animation-delay: 150ms; }
+.eq-bars span:nth-child(3) { animation-delay: 300ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
