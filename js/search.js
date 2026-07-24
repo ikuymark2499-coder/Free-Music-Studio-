@@ -1,5 +1,5 @@
 /* ==========================================================================
-   search.js — Local instant search + Online (ผ่าน PHP Proxy)
+   search.js — Local instant search + Online (Invidious API)
    ========================================================================== */
 
 import { escapeHtml, showToast, icon, coverImgHTML } from "./ui.js";
@@ -47,62 +47,92 @@ export function attachLiveSearch(inputEl, onQueryChange) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Online search — เรียกผ่าน PHP Proxy ของเราเอง                          */
+/* Online search — Invidious API (CORS-friendly, ไม่ต้องใช้ Proxy)        */
 /* ---------------------------------------------------------------------- */
 
+// รายชื่อ Invidious instances ที่ใช้งานได้ (เรียงตามความน่าเชื่อถือ)
+const INVICIOUS_INSTANCES = [
+  "https://invidious.jing.rocks",
+  "https://inv.riverside.rocks",
+  "https://yewtu.be",
+  "https://invidious.nerdvpn.de",
+  "https://invidious.lunar.icu",
+  "https://inv.vern.cc",
+  "https://vid.puffyan.us",
+];
+
+let lastWorkingInstance = null;
+
 /**
- * A. Fetch search results ผ่าน proxy.php
- * ไม่ต้องกังวลเรื่อง CORS เพราะ proxy อยู่บนโดเมนเดียวกัน
+ * A. Fetch search results จาก Invidious API
+ * ลองทีละ instance จนกว่าจะเจอที่ใช้งานได้
  */
+async function fetchFromInvidious(query) {
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+
+  // ถ้ามี instance ที่เคยใช้ได้ ให้ลองก่อน
+  const instancesToTry = lastWorkingInstance
+    ? [lastWorkingInstance, ...INVICIOUS_INSTANCES.filter(i => i !== lastWorkingInstance)]
+    : INVICIOUS_INSTANCES;
+
+  let lastError = null;
+
+  for (const instance of instancesToTry) {
+    try {
+      const url = new URL(`${instance}/api/v1/search`);
+      url.searchParams.set("q", trimmed);
+      url.searchParams.set("type", "video");
+      url.searchParams.set("fields", "videoId,title,author,authorId,authorUrl,viewCount,published,thumbnails,lengthSeconds");
+
+      const response = await fetch(url.toString(), {
+        headers: { "Accept": "application/json" },
+        signal: AbortSignal.timeout(10000), // 10 วินาที timeout
+      });
+
+      if (!response.ok) {
+        console.warn(`⚠️ Invidious ${instance} returned ${response.status}`);
+        continue;
+      }
+
+      const data = await response.json();
+
+      if (data && Array.isArray(data) && data.length > 0) {
+        lastWorkingInstance = instance;
+        console.log(`✅ Invidious success: ${instance} (${data.length} results)`);
+        return data;
+      }
+
+      // ถ้าได้ array ว่าง แสดงว่าไม่พบผลลัพธ์
+      if (Array.isArray(data) && data.length === 0) {
+        return [];
+      }
+
+    } catch (err) {
+      lastError = err;
+      console.warn(`⚠️ Invidious ${instance} failed:`, err.message);
+    }
+  }
+
+  console.error("❌ All Invidious instances failed");
+  throw new Error(lastError || "invidious_unavailable");
+}
+
 export async function fetchYouTubeData(query) {
   const trimmed = (query || "").trim();
   if (!trimmed) return [];
 
   try {
-    // เรียก proxy.php ที่เราสร้างไว้
-    const response = await fetch(`api/proxy.php?q=${encodeURIComponent(trimmed)}`, {
-      headers: { "Accept": "application/json" },
-      signal: AbortSignal.timeout(15000), // 15 วินาที
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // ถ้า proxy คืน error
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    // Invidious คืนเป็น array โดยตรง
-    if (Array.isArray(data) && data.length > 0) {
-      console.log(`✅ Proxy success (Invidious): ${data.length} results`);
-      return data;
-    }
-
-    // Piped คืนเป็น { items: [...] }
-    if (data.items && data.items.length > 0) {
-      console.log(`✅ Proxy success (Piped): ${data.items.length} results`);
-      return data.items;
-    }
-
-    // ถ้าได้ array ว่าง
-    if (Array.isArray(data) && data.length === 0) {
-      return [];
-    }
-
-    throw new Error("no_results");
+    return await fetchFromInvidious(trimmed);
   } catch (err) {
-    console.error("❌ Proxy fetch failed:", err.message);
-    throw new Error("proxy_unavailable");
+    console.error("All Invidious instances failed");
+    throw new Error("invidious_unavailable");
   }
 }
 
 /**
  * B. Render search results into `hostEl`.
- * Extracts videoId / title / thumbnail / uploaderName from each item.
+ * Extracts videoId / title / thumbnail / author from each item.
  */
 export function displaySearchResults(items, hostEl) {
   if (!items || items.length === 0) {
@@ -112,15 +142,15 @@ export function displaySearchResults(items, hostEl) {
 
   const cards = [];
   for (const item of items) {
-    // Invidious uses videoId, Piped uses url or videoId
-    const videoId = item.videoId || item.url?.split("watch?v=")[1];
+    // Invidious ใช้ videoId โดยตรง
+    const videoId = item.videoId;
     if (!videoId) continue;
 
     const title = item.title || "";
-    const uploaderName = item.author || item.uploaderName || item.uploader || "";
+    const uploaderName = item.author || "";
     
-    // ดึง thumbnail จากหลายแหล่ง
-    let thumbnail = item.thumbnail || item.thumbnails?.[0]?.url;
+    // ดึง thumbnail จาก thumbnails array
+    let thumbnail = item.thumbnails?.[0]?.url;
     if (!thumbnail && videoId) {
       thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
     }
@@ -195,8 +225,8 @@ export function initSearchPage(container) {
       console.error("search: failed", err);
       let message = "ไม่สามารถค้นหาได้ในขณะนี้";
       
-      if (err.message === "proxy_unavailable") {
-        message = "Proxy ไม่พร้อมใช้งาน (ตรวจสอบว่า PHP ทำงานหรือไม่)";
+      if (err.message === "invidious_unavailable") {
+        message = "Invidious API ไม่พร้อมใช้งาน (ลองเปลี่ยน WiFi หรือใช้ VPN)";
       } else if (err.message === "no_results") {
         message = "ไม่พบผลลัพธ์";
       } else {
