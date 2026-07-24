@@ -1,5 +1,5 @@
 /* ==========================================================================
-   search.js — Local instant search + Online (CORS Proxy + Piped)
+   search.js — Local instant search + Online (ผ่าน PHP Proxy)
    ========================================================================== */
 
 import { escapeHtml, showToast, icon, coverImgHTML } from "./ui.js";
@@ -8,7 +8,7 @@ import { player } from "./player.js";
 import { addYouTubeSongRecord, findSongByVideoId } from "./storage.js";
 
 /* ---------------------------------------------------------------------- */
-/* Local instant search (เหมือนเดิม)                                      */
+/* Local instant search                                                   */
 /* ---------------------------------------------------------------------- */
 
 function normalize(text) {
@@ -47,70 +47,63 @@ export function attachLiveSearch(inputEl, onQueryChange) {
 }
 
 /* ---------------------------------------------------------------------- */
-/* Online search — ใช้ Piped + CORS Proxy                                */
+/* Online search — เรียกผ่าน PHP Proxy ของเราเอง                          */
 /* ---------------------------------------------------------------------- */
 
-// ใช้ CORS proxy เพื่อ bypass CORS ใน Android
-const CORS_PROXY = "https://corsproxy.io/?";
-const PIPED_BASE = "https://pipedapi.kavin.rocks";
-
-// รายการสำรอง ถ้าตัวหลักใช้ไม่ได้
-const FALLBACK_INSTANCES = [
-  "https://api.piped.video",
-  "https://pipedapi.syncpundit.io",
-];
-
-let lastWorkingInstance = PIPED_BASE;
-
-async function fetchFromPiped(query) {
-  const trimmed = query.trim();
-  if (!trimmed) return [];
-
-  // ลองใช้ instance ที่เคยใช้ได้ก่อน
-  const instancesToTry = [lastWorkingInstance, ...FALLBACK_INSTANCES];
-
-  for (const instance of instancesToTry) {
-    try {
-      // ใช้ CORS proxy เพื่อให้ fetch ทำงานใน Android
-      const proxyUrl = `${CORS_PROXY}${instance}/search?q=${encodeURIComponent(trimmed)}&filter=videos&page=1`;
-      
-      // หรือใช้ direct fetch (ถ้า CORS ไม่ใช่ปัญหา)
-      // const directUrl = `${instance}/search?q=${encodeURIComponent(trimmed)}&filter=videos&page=1`;
-      
-      const response = await fetch(proxyUrl, {
-        headers: { "Accept": "application/json" },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (!response.ok) continue;
-
-      const data = await response.json();
-      const items = data.items || [];
-
-      if (items.length > 0) {
-        lastWorkingInstance = instance;
-        console.log(`✅ Piped success via proxy: ${instance}`);
-        return items;
-      }
-    } catch (err) {
-      console.warn(`⚠️ Piped ${instance} failed:`, err.message);
-    }
-  }
-
-  throw new Error("piped_unavailable");
-}
-
+/**
+ * A. Fetch search results ผ่าน proxy.php
+ * ไม่ต้องกังวลเรื่อง CORS เพราะ proxy อยู่บนโดเมนเดียวกัน
+ */
 export async function fetchYouTubeData(query) {
   const trimmed = (query || "").trim();
   if (!trimmed) return [];
 
   try {
-    return await fetchFromPiped(trimmed);
+    // เรียก proxy.php ที่เราสร้างไว้
+    const response = await fetch(`api/proxy.php?q=${encodeURIComponent(trimmed)}`, {
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(15000), // 15 วินาที
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // ถ้า proxy คืน error
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    // Invidious คืนเป็น array โดยตรง
+    if (Array.isArray(data) && data.length > 0) {
+      console.log(`✅ Proxy success (Invidious): ${data.length} results`);
+      return data;
+    }
+
+    // Piped คืนเป็น { items: [...] }
+    if (data.items && data.items.length > 0) {
+      console.log(`✅ Proxy success (Piped): ${data.items.length} results`);
+      return data.items;
+    }
+
+    // ถ้าได้ array ว่าง
+    if (Array.isArray(data) && data.length === 0) {
+      return [];
+    }
+
+    throw new Error("no_results");
   } catch (err) {
-    throw new Error("piped_unavailable");
+    console.error("❌ Proxy fetch failed:", err.message);
+    throw new Error("proxy_unavailable");
   }
 }
 
+/**
+ * B. Render search results into `hostEl`.
+ * Extracts videoId / title / thumbnail / uploaderName from each item.
+ */
 export function displaySearchResults(items, hostEl) {
   if (!items || items.length === 0) {
     hostEl.innerHTML = `<p class="song-sub search-status-text">${t("search_no_results")}</p>`;
@@ -119,15 +112,18 @@ export function displaySearchResults(items, hostEl) {
 
   const cards = [];
   for (const item of items) {
-    const videoId = item.url?.split("watch?v=")[1] || item.videoId;
+    // Invidious uses videoId, Piped uses url or videoId
+    const videoId = item.videoId || item.url?.split("watch?v=")[1];
     if (!videoId) continue;
 
     const title = item.title || "";
-    const uploaderName = item.uploaderName || item.uploader || "";
-    const thumbnail = 
-      item.thumbnail || 
-      item.thumbnails?.[0]?.url ||
-      `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    const uploaderName = item.author || item.uploaderName || item.uploader || "";
+    
+    // ดึง thumbnail จากหลายแหล่ง
+    let thumbnail = item.thumbnail || item.thumbnails?.[0]?.url;
+    if (!thumbnail && videoId) {
+      thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    }
 
     cards.push(`
       <div class="song-item" data-video-id="${escapeHtml(videoId)}" data-title="${escapeHtml(title)}" data-channel="${escapeHtml(uploaderName)}" data-thumbnail="${escapeHtml(thumbnail)}">
@@ -149,6 +145,11 @@ export function displaySearchResults(items, hostEl) {
     : `<p class="song-sub search-status-text">${t("search_no_results")}</p>`;
 }
 
+/**
+ * The first time a YouTube result is actually acted on, persist it as a
+ * real song record so it can live in the same library/queue/favorites/playlists
+ * as local .mp3 files.
+ */
 async function ensureYouTubeSongStored({ videoId, title, channelTitle, thumbnail }) {
   const existing = findSongByVideoId(videoId);
   if (existing) return existing;
@@ -158,7 +159,7 @@ async function ensureYouTubeSongStored({ videoId, title, channelTitle, thumbnail
     videoId,
     title: title || videoId,
     artist: channelTitle || "",
-    thumbnail,
+    thumbnail: thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
     addedAt: Date.now(),
   };
   const saved = await addYouTubeSongRecord(meta);
@@ -191,8 +192,17 @@ export function initSearchPage(container) {
       const items = await fetchYouTubeData(query);
       displaySearchResults(items, resultsHost);
     } catch (err) {
-      console.error("search: Piped search failed", err);
-      const message = "ไม่สามารถเชื่อมต่อ Piped API ได้ (ลองเปิด VPN หรือใช้ WiFi อื่น)";
+      console.error("search: failed", err);
+      let message = "ไม่สามารถค้นหาได้ในขณะนี้";
+      
+      if (err.message === "proxy_unavailable") {
+        message = "Proxy ไม่พร้อมใช้งาน (ตรวจสอบว่า PHP ทำงานหรือไม่)";
+      } else if (err.message === "no_results") {
+        message = "ไม่พบผลลัพธ์";
+      } else {
+        message = "เกิดข้อผิดพลาดในการค้นหา (ลองอีกครั้ง)";
+      }
+      
       showToast(message, "error");
       resultsHost.innerHTML = `<p class="song-sub search-status-text">${message}</p>`;
     } finally {
