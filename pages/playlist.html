@@ -1,0 +1,36 @@
+<div class="app-topbar">
+  <h1 data-i18n="title_playlist">Playlists</h1>
+  <button id="playlist-create-btn" class="icon-btn is-primary" data-i18n-aria="btn_create" aria-label="Create playlist">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</div>
+
+<div class="search-bar">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+  <input id="playlist-search-input" type="text" data-i18n-placeholder="search_placeholder" placeholder="Search" />
+</div>
+
+<div id="playlist-empty" class="empty-state hidden">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h11M4 12h11M4 18h6M17 9v9a2.5 2.5 0 11-2-2.45V9h2z"/></svg>
+  <h3 data-i18n="playlist_empty_title">No playlists yet</h3>
+  <p data-i18n="playlist_empty_desc">Create your first playlist.</p>
+</div>
+
+<div id="playlist-grid" class="playlist-grid"></div>
+
+<div id="playlist-detail" class="hidden"></div>
+
+<!-- Create / rename playlist modal -->
+<div id="playlist-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div id="playlist-modal-title" class="modal-title" data-i18n="playlist_create_title">Create playlist</div>
+    <div class="field">
+      <label data-i18n="playlist_name_placeholder">Playlist name</label>
+      <input id="playlist-name-input" type="text" data-i18n-placeholder="playlist_name_placeholder" placeholder="Playlist name" />
+    </div>
+    <div class="modal-actions">
+      <button id="playlist-modal-cancel" class="btn btn-ghost" data-i18n="btn_cancel">Cancel</button>
+      <button id="playlist-modal-save" class="btn btn-primary" data-i18n="btn_save">Save</button>
+    </div>
+  </div>
+</div>

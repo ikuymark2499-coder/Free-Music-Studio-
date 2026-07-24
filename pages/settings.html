@@ -1,0 +1,70 @@
+<div class="app-topbar">
+  <h1 data-i18n="title_settings">Settings</h1>
+</div>
+
+<div class="section-title" data-i18n="settings_language">Language</div>
+<div class="settings-group">
+  <div class="settings-row">
+    <div class="settings-row-label" data-i18n="settings_language">Language</div>
+    <div class="segmented">
+      <button data-lang-option="th">ไทย</button>
+      <button data-lang-option="en">EN</button>
+    </div>
+  </div>
+</div>
+
+<div class="section-title" data-i18n="settings_theme">Theme</div>
+<div class="settings-group">
+  <div class="settings-row">
+    <div class="settings-row-label" data-i18n="settings_theme">Theme</div>
+    <div class="segmented">
+      <button data-theme-option="dark" data-i18n="settings_theme_dark">Dark</button>
+      <button data-theme-option="light" data-i18n="settings_theme_light">Light</button>
+      <button data-theme-option="system" data-i18n="settings_theme_system">System</button>
+    </div>
+  </div>
+</div>
+
+<div class="section-title" data-i18n="settings_animation">Appearance</div>
+<div class="settings-group">
+  <div class="settings-row">
+    <div>
+      <div class="settings-row-label" data-i18n="settings_animation">Animation</div>
+      <div class="settings-row-desc" data-i18n="settings_animation_desc">Toggle motion effects</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-animation" />
+      <span class="switch-track"></span>
+      <span class="switch-thumb"></span>
+    </label>
+  </div>
+  <div class="settings-row">
+    <div>
+      <div class="settings-row-label" data-i18n="settings_blur">Background blur</div>
+      <div class="settings-row-desc" data-i18n="settings_blur_desc">Blur the full player background</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-blur" />
+      <span class="switch-track"></span>
+      <span class="switch-thumb"></span>
+    </label>
+  </div>
+  <div class="settings-row">
+    <div>
+      <div class="settings-row-label" data-i18n="settings_showcover">Show album art</div>
+      <div class="settings-row-desc" data-i18n="settings_showcover_desc">Show large cover artwork</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-showcover" />
+      <span class="switch-track"></span>
+      <span class="switch-thumb"></span>
+    </label>
+  </div>
+</div>
+
+<div class="settings-group">
+  <button class="settings-row" id="settings-about-link" style="width:100%;text-align:left" onclick="window.dispatchEvent(new CustomEvent('mp:navigate', {detail:{route:'about'}}))">
+    <div class="settings-row-label" data-i18n="settings_about">About this app</div>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</div>

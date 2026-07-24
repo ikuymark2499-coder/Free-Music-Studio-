@@ -1,0 +1,44 @@
+<div class="app-topbar">
+  <h1 data-i18n="title_library">Library</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span id="library-count" class="count-pill">0</span>
+    <button id="library-add-btn" class="icon-btn is-primary" data-i18n-aria="btn_add_music" aria-label="Add music">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+</div>
+
+<input id="library-file-input" type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" multiple class="hidden" />
+
+<div id="library-scan-progress" class="scan-progress hidden">
+  <div class="scan-progress-track"><div id="library-scan-progress-bar" class="scan-progress-bar"></div></div>
+  <span id="library-scan-progress-text"></span>
+</div>
+
+<div class="search-bar">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+  <input id="library-search-input" type="text" data-i18n-placeholder="search_placeholder" placeholder="Search" />
+</div>
+
+<div class="sort-bar">
+  <label for="library-sort-select" data-i18n="sort_label">Sort</label>
+  <select id="library-sort-select">
+    <option value="newest" data-i18n="sort_newest">Recently added</option>
+    <option value="oldest" data-i18n="sort_oldest">Oldest added</option>
+    <option value="az" data-i18n="sort_az">Title A-Z</option>
+    <option value="za" data-i18n="sort_za">Title Z-A</option>
+    <option value="artist" data-i18n="sort_artist">Artist</option>
+    <option value="album" data-i18n="sort_album">Album</option>
+    <option value="duration" data-i18n="sort_duration">Duration</option>
+  </select>
+</div>
+
+<div id="library-empty" class="empty-state hidden">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  <h3 data-i18n="library_empty_title">No songs yet</h3>
+  <p data-i18n="library_empty_desc">Tap the button below to add music.</p>
+</div>
+
+<p id="library-no-results" class="song-sub hidden" data-i18n="search_no_results">No results</p>
+
+<div id="library-list"></div>
