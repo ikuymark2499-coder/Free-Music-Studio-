@@ -40,6 +40,7 @@ class PlayerEngine extends EventTarget {
     this._ytCurrentTime = 0;
     this._ytDuration = 0;
     this._ytPollHandle = null;
+    this._isLoading = false;
 
     const prefs = getPlayerPrefs();
     this.shuffleOn = prefs.shuffleOn;
@@ -56,10 +57,17 @@ class PlayerEngine extends EventTarget {
   get isYouTubeActive() {
     return !!(this.currentSong && this.currentSong.source === "youtube");
   }
+  
 
   isPlaying() {
     return this.isYouTubeActive ? this._ytIsPlaying : !this.audio.paused;
   }
+  
+  
+  isLoading() {
+     return this._isLoading;
+  }
+
 
   getCurrentTime() {
     return this.isYouTubeActive ? this._ytCurrentTime : this.audio.currentTime;
@@ -282,13 +290,13 @@ class PlayerEngine extends EventTarget {
   }
 
   _handleYtError(event) {
-    console.error("player: YouTube playback error", event.data);
-    showToast(t("toast_online_error"), "error");
-    this._emit("loaderror", { song: this.currentSong, youtubeErrorCode: event.data });
-    // Behaves like a broken/region-locked link — skip forward automatically
-    // instead of leaving the UI stuck on a track that will never play.
-    this.next();
-  }
+  console.error("player: YouTube playback error", event.data);
+  this._isLoading = false;
+  this._emit("loadend", { song: this.currentSong });
+  showToast(t("toast_online_error"), "error");
+  this._emit("loaderror", { song: this.currentSong, youtubeErrorCode: event.data });
+  this.next();
+}
 
   _startYtPolling() {
     this._stopYtPolling();
@@ -351,59 +359,103 @@ class PlayerEngine extends EventTarget {
   }
 
   async _playLocalSong(song) {
-    // Guards against a fast next()/previous() spam resolving out of order.
-    const loadToken = (this._loadToken = (this._loadToken || 0) + 1);
-    this._stopYouTube();
+  const loadToken = (this._loadToken = (this._loadToken || 0) + 1);
+  this._stopYouTube();
+  
+  this._isLoading = true;
+  this._emit("loadstart", { song });
 
-    let audioUrl;
-    try {
-      audioUrl = await getAudioObjectURL(song.id);
-    } catch (err) {
-      console.error("player: failed to load audio blob", song.id, err);
-    }
-    if (loadToken !== this._loadToken) return; // a newer load started meanwhile
-    if (!audioUrl) {
-      this._emit("loaderror", { song });
-      return;
-    }
-
-    this.currentSong = song;
-    this.audio.src = audioUrl;
-    this.audio.play().catch(() => {
-      /* Autoplay might be blocked before first user gesture; ignore silently */
-    });
-    this._emit("songchange", { song });
-    this._persistQueueState();
+  let audioUrl;
+  try {
+    audioUrl = await getAudioObjectURL(song.id);
+  } catch (err) {
+    console.error("player: failed to load audio blob", song.id, err);
   }
+  if (loadToken !== this._loadToken) {
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    return;
+  }
+  if (!audioUrl) {
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    this._emit("loaderror", { song });
+    return;
+  }
+
+  this.currentSong = song;
+  this.audio.src = audioUrl;
+  
+  const onLoaded = () => {
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    this.audio.removeEventListener("loadedmetadata", onLoaded);
+  };
+  this.audio.addEventListener("loadedmetadata", onLoaded);
+
+  const onError = () => {
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    this._emit("loaderror", { song });
+    this.audio.removeEventListener("error", onError);
+  };
+  this.audio.addEventListener("error", onError);
+
+  this.audio.play().catch(() => {});
+  this._emit("songchange", { song });
+  this._persistQueueState();
+}
 
   async _playYouTubeSong(song) {
-    const loadToken = (this._loadToken = (this._loadToken || 0) + 1);
-    this.audio.pause(); // stop local playback if it was active
+  const loadToken = (this._loadToken = (this._loadToken || 0) + 1);
+  this.audio.pause();
 
-    try {
-      await this._ensureYtPlayerReady();
-    } catch (err) {
-      console.error("player: YouTube player failed to initialize", err);
-      showToast(t("toast_online_error"), "error");
-      this._emit("loaderror", { song });
-      return;
-    }
-    if (loadToken !== this._loadToken) return;
+  this._isLoading = true;
+  this._emit("loadstart", { song });
 
-    this.currentSong = song;
-    this._ytDuration = 0;
-    this._ytCurrentTime = 0;
-    try {
-      this.ytPlayer.loadVideoById(song.videoId); // loads AND starts playing
-    } catch (err) {
-      console.error("player: failed to load YouTube video", song.videoId, err);
-      showToast(t("toast_online_error"), "error");
-      this._emit("loaderror", { song });
-      return;
-    }
-    this._emit("songchange", { song });
-    this._persistQueueState();
+  try {
+    await this._ensureYtPlayerReady();
+  } catch (err) {
+    console.error("player: YouTube player failed to initialize", err);
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    showToast(t("toast_online_error"), "error");
+    this._emit("loaderror", { song });
+    return;
   }
+  if (loadToken !== this._loadToken) {
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    return;
+  }
+
+  this.currentSong = song;
+  this._ytDuration = 0;
+  this._ytCurrentTime = 0;
+  try {
+    this.ytPlayer.loadVideoById(song.videoId);
+  } catch (err) {
+    console.error("player: failed to load YouTube video", song.videoId, err);
+    this._isLoading = false;
+    this._emit("loadend", { song });
+    showToast(t("toast_online_error"), "error");
+    this._emit("loaderror", { song });
+    return;
+  }
+
+  const onStateChange = (event) => {
+    const State = window.YT.PlayerState;
+    if (event.data === State.PLAYING || event.data === State.BUFFERING) {
+      this._isLoading = false;
+      this._emit("loadend", { song });
+      this.ytPlayer.removeEventListener("onStateChange", onStateChange);
+    }
+  };
+  this.ytPlayer.addEventListener("onStateChange", onStateChange);
+
+  this._emit("songchange", { song });
+  this._persistQueueState();
+}
 
   playSongInContext(songId, contextIds) {
     const startIndex = contextIds.indexOf(songId);

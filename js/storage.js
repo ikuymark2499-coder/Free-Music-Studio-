@@ -20,7 +20,7 @@
    ========================================================================== */
 
 const DB_NAME = "musicPlayerDB";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const STORES = {
   SONGS: "songs",
@@ -28,6 +28,7 @@ const STORES = {
   COVERS: "coverBlobs",
   PLAYLISTS: "playlists",
   KV: "kv",
+  LYRICS: "lyricsCache",
 };
 
 const LS_KEYS = {
@@ -82,6 +83,9 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains(STORES.KV)) {
         db.createObjectStore(STORES.KV, { keyPath: "key" });
+      }
+      if (!db.objectStoreNames.contains(STORES.LYRICS)) {
+        db.createObjectStore(STORES.LYRICS, { keyPath: "songId" });
       }
     };
 
@@ -293,6 +297,7 @@ export async function deleteSongRecord(songId) {
       idbDelete(STORES.SONGS, songId),
       idbDelete(STORES.AUDIO, songId),
       idbDelete(STORES.COVERS, songId),
+      idbDelete(STORES.LYRICS, songId),
     ]);
   } catch (err) {
     console.error("storage: failed to delete song", songId, err);
@@ -471,6 +476,37 @@ export function getLastPage() {
 }
 export function saveLastPage(route) {
   localStorage.setItem(LS_KEYS.LAST_PAGE, route);
+}
+
+/* ---------- Lyrics cache (LRC text keyed by songId) --------------------- */
+/**
+ * Returns the cached lyrics record for a song, or null if nothing is cached.
+ * Shape: { songId, status: "synced"|"plain"|"none", syncedLyrics, plainLyrics, savedTime }
+ */
+export async function getCachedLyrics(songId) {
+  try {
+    const record = await idbGet(STORES.LYRICS, songId);
+    return record || null;
+  } catch (err) {
+    console.error("storage: failed to read lyrics cache", err);
+    return null;
+  }
+}
+
+export async function saveCachedLyrics(songId, data) {
+  try {
+    await idbPut(STORES.LYRICS, { songId, savedTime: Date.now(), ...data });
+  } catch (err) {
+    console.error("storage: failed to save lyrics cache", err);
+  }
+}
+
+export async function deleteCachedLyrics(songId) {
+  try {
+    await idbDelete(STORES.LYRICS, songId);
+  } catch (err) {
+    console.error("storage: failed to delete lyrics cache", err);
+  }
 }
 
 export { STORES };

@@ -10,6 +10,9 @@ import { initPlaylistPage, getPlaylists, addSongToPlaylist, createPlaylist } fro
 import { initSearchPage } from "./search.js";
 import { initStorage, getFavorites, saveFavorites, getLastPage, saveLastPage } from "./storage.js";
 import { player } from "./player.js";
+import { getLyricsForSong, findActiveLineIndex } from "./lyrics.js";
+import { playUISound } from "./ui-sound.js";
+import { registerServiceWorker, initInstallPrompt, onUpdateReady, applyUpdate } from "./future/pwa.js";
 import {
   icon,
   showToast,
@@ -64,7 +67,10 @@ async function navigate(route) {
 }
 
 navButtons.forEach((btn) => {
-  btn.addEventListener("click", () => navigate(btn.dataset.route));
+  btn.addEventListener("click", () => {
+    playUISound(btn.dataset.route); // synthesized tap sound (Web Audio API)
+    navigate(btn.dataset.route);
+  });
 });
 
 // Allows any page fragment to request navigation (e.g. Settings -> About)
@@ -237,7 +243,9 @@ const miniTitle = document.getElementById("mini-title");
 const miniArtist = document.getElementById("mini-artist");
 const miniPlayBtn = document.getElementById("mini-play-btn");
 const miniNextBtn = document.getElementById("mini-next-btn");
+miniNextBtn.innerHTML = icon("next");
 const miniProgress = document.getElementById("mini-progress");
+const miniCloseBtn = document.getElementById("mini-close-btn");
 
 const fullPlayer = document.getElementById("full-player");
 const fpCover = document.getElementById("fp-cover");
@@ -253,7 +261,35 @@ const fpShuffleBtn = document.getElementById("fp-shuffle-btn");
 const fpRepeatBtn = document.getElementById("fp-repeat-btn");
 const fpFavoriteBtn = document.getElementById("fp-favorite-btn");
 const fpQueueBtn = document.getElementById("fp-queue-btn");
+const fpLyrics = document.getElementById("fp-lyrics");
+const fpLyricsInner = document.getElementById("fp-lyrics-inner");
+const fpLyricsInfoBtn = document.getElementById("fp-lyrics-info-btn");
+const fpLyricsInfoPopover = document.getElementById("fp-lyrics-info-popover");
+const fpLyricsMatchedInfo = document.getElementById("fp-lyrics-matched-info");
 const queueSheet = document.getElementById("queue-sheet");
+
+
+function closeMiniPlayer() {
+  player.stop();
+  miniPlayer.classList.add("is-hidden");
+  
+  miniTitle.textContent = "—";
+  miniArtist.textContent = "—";
+  miniCover.innerHTML = "";
+  miniProgress.style.width = "0%";
+  
+  updateTransportButtons();
+  if (fullPlayer.classList.contains("is-visible")) {
+    closeFullPlayer();
+  }
+}
+
+// เพิ่ม event listener
+miniCloseBtn.addEventListener("click", (event) => {
+  event.stopPropagation(); // ป้องกันการเปิด full player
+  closeMiniPlayer();
+});
+
 
 function refreshMiniPlayer() {
   const song = player.currentSong;
@@ -285,6 +321,102 @@ function syncFullPlayerFavoriteButton() {
   fpFavoriteBtn.classList.toggle("toggle-btn", true);
 }
 
+/* ---------------------------------------------------------------------- */
+/* Karaoke lyrics (LRCLIB, cached in IndexedDB via storage.js)            */
+/* ---------------------------------------------------------------------- */
+
+let currentLyrics = { status: "none", lines: [] };
+let currentLyricsSongId = null;
+let activeLyricsLineIndex = -1;
+
+function renderLyrics(result) {
+  if (!fpLyricsInner) return;
+  if (result.status === "synced" && result.lines.length) {
+    fpLyricsInner.innerHTML = result.lines
+      .map((line, index) => `<p class="fp-lyrics-line" data-index="${index}">${escapeHtml(line.text || "♪")}</p>`)
+      .join("");
+  } else if (result.status === "plain" && result.plainText) {
+    fpLyricsInner.innerHTML = `<p class="fp-lyrics-plain">${escapeHtml(result.plainText)}</p>`;
+  } else {
+    fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_none")}</div>`;
+  }
+  updateLyricsInfoDisclosure(result);
+}
+
+/**
+ * Show a small "?" next to the lyrics whenever we actually have lyrics on
+ * screen, since they were matched automatically by title and may belong
+ * to a different version/artist than what's playing. Tapping it reveals
+ * a short explanation plus (when available) what track/artist the lyrics
+ * were actually matched to, so the person can judge for themselves.
+ */
+function updateLyricsInfoDisclosure(result) {
+  if (!fpLyricsInfoBtn) return;
+
+  const hasLyrics = result.status === "synced" || result.status === "plain";
+  fpLyricsInfoBtn.classList.toggle("is-hidden", !hasLyrics);
+  if (!hasLyrics) {
+    hideLyricsInfoPopover();
+    return;
+  }
+
+  if (fpLyricsMatchedInfo) {
+    const track = result.matchedTrackName;
+    const artist = result.matchedArtistName;
+    fpLyricsMatchedInfo.textContent = track
+      ? t("lyrics_matched_as", { track, artist: artist || t("unknown_artist") })
+      : "";
+  }
+}
+
+function hideLyricsInfoPopover() {
+  fpLyricsInfoBtn?.classList.remove("is-active");
+  fpLyricsInfoPopover?.classList.add("is-hidden");
+}
+
+async function loadLyricsForCurrentSong() {
+  const song = player.currentSong;
+  if (!fpLyricsInner) return;
+
+  if (!song) {
+    currentLyrics = { status: "none", lines: [] };
+    currentLyricsSongId = null;
+    activeLyricsLineIndex = -1;
+    fpLyricsInner.innerHTML = "";
+    return;
+  }
+
+  currentLyricsSongId = song.id;
+  activeLyricsLineIndex = -1;
+  fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_loading")}</div>`;
+  fpLyricsInfoBtn?.classList.add("is-hidden");
+  hideLyricsInfoPopover();
+
+  const result = await getLyricsForSong(song);
+
+  // The user may have skipped to another song while this was in flight.
+  if (!player.currentSong || player.currentSong.id !== currentLyricsSongId) return;
+
+  currentLyrics = result;
+  renderLyrics(result);
+}
+
+function updateLyricsHighlight(currentTime) {
+  if (currentLyrics.status !== "synced" || !currentLyrics.lines.length) return;
+  const index = findActiveLineIndex(currentLyrics.lines, currentTime);
+  if (index === activeLyricsLineIndex) return;
+  activeLyricsLineIndex = index;
+
+  const lineEls = fpLyricsInner.querySelectorAll(".fp-lyrics-line");
+  lineEls.forEach((el, i) => {
+    el.classList.toggle("is-active", i === index);
+    el.classList.toggle("is-passed", i < index);
+  });
+
+  const activeEl = lineEls[index];
+  if (activeEl) activeEl.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
 function refreshActiveSongHighlight() {
   document.querySelectorAll(".song-item").forEach((item) => {
     const isCurrent = player.currentSong && item.getAttribute("data-song-id") === player.currentSong.id;
@@ -292,8 +424,19 @@ function refreshActiveSongHighlight() {
   });
 }
 
+// ฟังก์ชันอัปเดตปุ่มเล่นและปุ่มควบคุมต่างๆ
 function updateTransportButtons() {
   const playing = player.isPlaying();
+  const loading = player.isLoading ? player.isLoading() : false;
+
+  // ถ้ากำลังโหลด แสดง spinner
+  if (loading) {
+    miniPlayBtn.innerHTML = icon("spinner");
+    fpPlayBtn.innerHTML = icon("spinner");
+    return;
+  }
+
+  // ถ้าไม่โหลด แสดง play/pause ตามปกติ
   miniPlayBtn.innerHTML = icon(playing ? "pause" : "play");
   fpPlayBtn.innerHTML = icon(playing ? "pause" : "play");
   fpShuffleBtn.classList.toggle("is-active", player.shuffleOn);
@@ -301,14 +444,24 @@ function updateTransportButtons() {
   fpRepeatBtn.classList.toggle("is-active", player.repeatMode !== "off");
 }
 
+// Event Listeners
 player.addEventListener("songchange", () => {
   refreshMiniPlayer();
   refreshFullPlayer();
   refreshActiveSongHighlight();
+  loadLyricsForCurrentSong();
 });
+
 player.addEventListener("statechange", updateTransportButtons);
+
 player.addEventListener("shufflechange", updateTransportButtons);
+
 player.addEventListener("repeatchange", updateTransportButtons);
+
+// เพิ่ม listener สำหรับการโหลด
+player.addEventListener("loadstart", updateTransportButtons);
+player.addEventListener("loadend", updateTransportButtons);
+
 player.addEventListener("timeupdate", ({ detail }) => {
   const ratio = detail.duration ? detail.currentTime / detail.duration : 0;
   miniProgress.style.width = `${ratio * 100}%`;
@@ -316,7 +469,9 @@ player.addEventListener("timeupdate", ({ detail }) => {
   fpProgressThumb.style.left = `${ratio * 100}%`;
   fpCurrentTime.textContent = formatTime(detail.currentTime);
   fpDuration.textContent = formatTime(detail.duration);
+  updateLyricsHighlight(detail.currentTime);
 });
+
 player.addEventListener("metadata", ({ detail }) => {
   const song = player.currentSong;
   if (song && song.source === "youtube" && !song.duration && detail.duration) {
@@ -341,6 +496,18 @@ function closeFullPlayer() {
     fullPlayer.classList.remove("is-visible", "is-closing", "is-open");
   }, 220);
 }
+fpLyricsInfoBtn?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const willShow = fpLyricsInfoPopover?.classList.contains("is-hidden");
+  fpLyricsInfoPopover?.classList.toggle("is-hidden", !willShow);
+  fpLyricsInfoBtn.classList.toggle("is-active", willShow);
+});
+document.addEventListener("click", (event) => {
+  if (!fpLyricsInfoPopover || fpLyricsInfoPopover.classList.contains("is-hidden")) return;
+  if (event.target === fpLyricsInfoBtn || fpLyricsInfoPopover.contains(event.target)) return;
+  hideLyricsInfoPopover();
+});
+
 document.getElementById("fp-collapse-btn")?.addEventListener("click", closeFullPlayer);
 fpPlayBtn.addEventListener("click", () => player.togglePlayPause());
 document.getElementById("fp-next-btn")?.addEventListener("click", () => player.next());
@@ -416,10 +583,42 @@ bindOverlayDismiss(queueSheet);
 /* Bootstrap                                                              */
 /* ---------------------------------------------------------------------- */
 
+const LOADER_SLOGAN_KEYS = [
+  "loader_slogan_1",
+  "loader_slogan_2",
+  "loader_slogan_3",
+  "loader_slogan_4",
+  "loader_slogan_5",
+  "loader_slogan_6",
+];
+const LOADER_MIN_DISPLAY_MS = 1200; // let the letter-wave animation complete at least once
+
+function showRandomLoaderSlogan() {
+  const sloganEl = document.getElementById("app-loader-slogan");
+  if (!sloganEl) return;
+  const key = LOADER_SLOGAN_KEYS[Math.floor(Math.random() * LOADER_SLOGAN_KEYS.length)];
+  sloganEl.textContent = t(key);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function bootstrap() {
+  const loaderStartedAt = performance.now();
+
+  registerServiceWorker();
+  initInstallPrompt();
+  onUpdateReady((registration) => {
+    showToast(t("pwa_update_ready"));
+    // Give the toast a moment to be seen, then swap in the new version.
+    setTimeout(() => applyUpdate(registration), 2500);
+  });
+
   initSettingsSystem();
   await initLanguage();
   applyTranslations(document);
+  showRandomLoaderSlogan();
   await initStorage();
 
   player.setSongLookup((id) => getSongById(id));
@@ -435,6 +634,19 @@ async function bootstrap() {
 
   await navigate(getLastPage());
   updateTransportButtons();
+
+  // Only wait to top up a *minimum* display time — if real loading already
+  // took longer than that, we don't add any extra artificial delay.
+  const elapsed = performance.now() - loaderStartedAt;
+  if (elapsed < LOADER_MIN_DISPLAY_MS) {
+    await delay(LOADER_MIN_DISPLAY_MS - elapsed);
+  }
+
+  const appLoader = document.getElementById("app-loader");
+  if (appLoader) {
+    appLoader.classList.add("is-hidden");
+    appLoader.addEventListener("animationend", () => appLoader.remove(), { once: true });
+  }
 }
 
 bootstrap();

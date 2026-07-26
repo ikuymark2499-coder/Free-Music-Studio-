@@ -11,7 +11,7 @@ import {
   getFavorites,
   DEFAULT_COVER,
 } from "./storage.js";
-import { icon, showToast, escapeHtml, formatTime, coverImgHTML } from "./ui.js";
+import { icon, showToast, escapeHtml, formatTime, coverImgHTML, openOverlay, closeOverlay, bindOverlayDismiss } from "./ui.js";
 import { t } from "./language.js";
 import { player } from "./player.js";
 import { filterSongs, attachLiveSearch } from "./search.js";
@@ -151,6 +151,18 @@ export async function updateSong(songId, patch) {
 
 export const SORT_OPTIONS = ["newest", "oldest", "az", "za", "artist", "album", "duration"];
 
+// Maps each sort key to its i18n label key, used to render the trigger
+// button's current label and each row inside the sort bottom sheet.
+const SORT_LABEL_KEYS = {
+  newest: "sort_newest",
+  oldest: "sort_oldest",
+  az: "sort_az",
+  za: "sort_za",
+  artist: "sort_artist",
+  album: "sort_album",
+  duration: "sort_duration",
+};
+
 export function sortSongs(songs, sortKey) {
   const list = [...songs];
   switch (sortKey) {
@@ -201,6 +213,28 @@ export function renderSongList(songs, options = {}) {
 
 /* ---------------- Page controller ---------------- */
 
+// The sort sheet itself lives in index.html (the persistent app shell, same
+// as the queue/song-menu sheets), not inside the library page markup that
+// gets re-fetched/re-rendered on every visit. So its listeners are wired up
+// exactly ONCE here at module scope — otherwise re-running initLibraryPage()
+// on every Library-tab visit would stack duplicate click handlers on it.
+const sortSheet = document.getElementById("library-sort-sheet");
+const sortOptionsHost = sortSheet ? sortSheet.querySelector("#library-sort-options") : null;
+
+// Holds the callback for whichever library page instance is currently on
+// screen, since sortOptionsHost's click listener below must always act on
+// the *current* instance's state, not whichever one existed when it fired.
+let onSortOptionSelected = null;
+
+if (sortOptionsHost) {
+  sortOptionsHost.addEventListener("click", (event) => {
+    const optionBtn = event.target.closest(".sort-option");
+    if (!optionBtn || !onSortOptionSelected) return;
+    onSortOptionSelected(optionBtn.dataset.sortKey);
+  });
+}
+if (sortSheet) bindOverlayDismiss(sortSheet); // tap the backdrop to close, like every other sheet
+
 export function initLibraryPage(container) {
   const listHost = container.querySelector("#library-list");
   const fileInput = container.querySelector("#library-file-input");
@@ -209,13 +243,14 @@ export function initLibraryPage(container) {
   const countPill = container.querySelector("#library-count");
   const searchInput = container.querySelector("#library-search-input");
   const noResults = container.querySelector("#library-no-results");
-  const sortSelect = container.querySelector("#library-sort-select");
+  const sortTrigger = container.querySelector("#library-sort-trigger");
+  const sortTriggerLabel = sortTrigger ? sortTrigger.querySelector(".sort-trigger-label") : null;
   const progressHost = container.querySelector("#library-scan-progress");
   const progressBar = container.querySelector("#library-scan-progress-bar");
   const progressText = container.querySelector("#library-scan-progress-text");
 
   let currentQuery = "";
-  let currentSort = sortSelect ? sortSelect.value : "newest";
+  let currentSort = "newest";
 
   function render() {
     const allSongs = getAllSongs();
@@ -245,11 +280,42 @@ export function initLibraryPage(container) {
     render();
   });
 
-  if (sortSelect) {
-    sortSelect.addEventListener("change", () => {
-      currentSort = sortSelect.value;
-      render();
+  // ---- Sort bottom sheet (Material Design style, replaces the native <select>) ----
+  function updateSortTriggerLabel() {
+    if (sortTriggerLabel) sortTriggerLabel.textContent = t(SORT_LABEL_KEYS[currentSort] || "sort_newest");
+  }
+
+  function renderSortOptions() {
+    if (!sortOptionsHost) return;
+    sortOptionsHost.innerHTML = SORT_OPTIONS.map((key) => {
+      const isSelected = key === currentSort;
+      return `
+        <button class="sort-option${isSelected ? " is-selected" : ""}" data-sort-key="${key}" type="button">
+          <span>${t(SORT_LABEL_KEYS[key])}</span>
+          <span class="sort-option-check">${icon("check")}</span>
+        </button>`;
+    }).join("");
+  }
+
+  if (sortTrigger && sortSheet) {
+    updateSortTriggerLabel();
+
+    // This listener is scoped to the button inside `container`, which is
+    // torn down and rebuilt on every navigation — so, unlike the sheet
+    // itself, it's safe to attach fresh each time initLibraryPage() runs.
+    sortTrigger.addEventListener("click", () => {
+      renderSortOptions(); // refresh checkmarks in case sort changed elsewhere
+      openOverlay(sortSheet);
     });
+
+    // Hand this page instance's own logic to the module-level delegate so
+    // the single shared sortOptionsHost listener calls into *this* visit.
+    onSortOptionSelected = (sortKey) => {
+      currentSort = sortKey;
+      updateSortTriggerLabel();
+      closeOverlay(sortSheet);
+      render();
+    };
   }
 
   addBtn.addEventListener("click", () => fileInput.click());

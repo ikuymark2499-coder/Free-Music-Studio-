@@ -5,6 +5,8 @@
 import { getSettings, saveSettings } from "./storage.js";
 import { setLanguage, getCurrentLanguage, t } from "./language.js";
 import { showToast } from "./ui.js";
+import { playUISound, setUISoundEnabled, getUISoundEnabled } from "./ui-sound.js";
+import { bindInstallRow } from "./future/pwa.js";
 
 const mediaQueryDark = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -43,6 +45,7 @@ export function initSettingsPage(container) {
   const animationToggle = container.querySelector("#toggle-animation");
   const blurToggle = container.querySelector("#toggle-blur");
   const coverToggle = container.querySelector("#toggle-showcover");
+  const uiSoundToggle = container.querySelector("#toggle-uisound");
 
   function syncThemeButtons() {
     const current = getSettings().theme;
@@ -87,6 +90,24 @@ export function initSettingsPage(container) {
     showToast(t("toast_settings_saved"));
   });
 
+  // UI tap sound toggle — this preference lives inside ui-sound.js itself
+  // (its own localStorage key) rather than the main settings object, so it
+  // stays fully self-contained and doesn't touch the existing settings schema.
+  if (uiSoundToggle) {
+    uiSoundToggle.checked = getUISoundEnabled();
+    uiSoundToggle.addEventListener("change", () => {
+      setUISoundEnabled(uiSoundToggle.checked);
+      showToast(t("toast_settings_saved"));
+      if (uiSoundToggle.checked) playUISound("settings"); // quick audible confirmation
+    });
+  }
+
   syncThemeButtons();
   syncLanguageButtons();
+
+  bindInstallRow({
+    row: container.querySelector("#install-row"),
+    button: container.querySelector("#install-app-btn"),
+    iosHint: container.querySelector("#install-ios-hint"),
+  });
 }
