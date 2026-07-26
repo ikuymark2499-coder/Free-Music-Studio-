@@ -1,24 +1,125 @@
 <div class="app-topbar">
-  <h1 data-i18n="title_about">About</h1>
+  <h1 data-i18n="about_title">About</h1>
 </div>
 
 <div class="about-hero">
-  <div class="about-logo">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zM21 16a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+  <div class="about-logo-wrap">
+    <img
+      src="assets/images/logo-gookoo.png"
+      alt="GooKoo"
+      class="about-logo"
+    />
   </div>
-  <div class="about-version" data-i18n="app_name">Playlist+</div>
-  <p class="about-version">v0.1.0</p>
+
+  <p class="about-tagline" data-i18n="about_tagline">Your music, your way</p>
+  <span class="about-version">v1.0.0 Beta</span>
 </div>
 
-<p class="song-sub" style="text-align:center;padding:0 16px" data-i18n="about_desc">
-  A personal music player.
+<p class="song-sub about-desc" data-i18n="about_description">
+  Playlist+ blends YouTube search with your own local MP3 library, so every
+  song you love lives in one clean, fast player — online or off.
 </p>
 
-<ul class="about-list">
-  <li class="settings-row" style="background:var(--color-card);border-radius:var(--radius-md)">
-    <span data-i18n="about_offline">Offline-ready in a future update</span>
-  </li>
-  <li class="settings-row" style="background:var(--color-card);border-radius:var(--radius-md)">
-    <span data-i18n="about_pwa">Installable as a mobile app (coming soon)</span>
-  </li>
-</ul>
+<div class="about-section">
+  <h2 class="about-section-title" data-i18n="about_features_title">What you can do</h2>
+
+  <div class="about-features">
+    <div class="about-feature">
+      <span class="about-feature-icon">🔎</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_search_title">Search YouTube</strong>
+        <span data-i18n="about_feature_search_desc">Find and play almost any track without leaving the app</span>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <span class="about-feature-icon">🚫</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_noads_title">No ads</strong>
+        <span data-i18n="about_feature_noads_desc">Listen without interruptions — no banners, no pre-roll, ever</span>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <span class="about-feature-icon">🎵</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_local_title">Play local MP3s</strong>
+        <span data-i18n="about_feature_local_desc">Import songs straight from your device, no upload needed</span>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <span class="about-feature-icon">📁</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_playlist_title">Build playlists</strong>
+        <span data-i18n="about_feature_playlist_desc">Group tracks the way you actually listen to them</span>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <span class="about-feature-icon">❤️</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_favorite_title">Save favorites</strong>
+        <span data-i18n="about_feature_favorite_desc">One tap to keep the songs you replay the most</span>
+      </div>
+    </div>
+
+    <div class="about-feature">
+      <span class="about-feature-icon">📲</span>
+      <div class="about-feature-copy">
+        <strong data-i18n="about_feature_offline_title">Install as an app</strong>
+        <span data-i18n="about_feature_offline_desc">Add it to your home screen and it works like a native app</span>
+      </div>
+    </div>
+  </div>
+<div class="about-section">
+  <h2 class="about-section-title" data-i18n="about_info_title">App info</h2>
+
+  <div class="about-card">
+    <div class="settings-row">
+      <span data-i18n="about_developer">Developer</span>
+      <strong>GanZ Labs</strong>
+    </div>
+
+    <div class="settings-row">
+      <span data-i18n="about_website">Website</span>
+      <a href="https://ganzlabs.itch.io/" target="_blank" rel="noopener noreferrer">
+        ganzlabs.itch.io
+      </a>
+    </div>
+
+    <div class="settings-row">
+      <span data-i18n="about_platform">Platform</span>
+      <strong data-i18n="about_platform_value">Web App (PWA)</strong>
+    </div>
+
+    <div class="settings-row">
+      <span data-i18n="about_technology">Technology</span>
+      <strong>HTML • CSS • JavaScript • IndexedDB</strong>
+    </div>
+
+    <div class="settings-row">
+      <span data-i18n="about_music_sources">Music Sources</span>
+      <strong data-i18n="about_music_sources_value">
+        YouTube Data API v3 + Local MP3
+      </strong>
+    </div>
+
+    <div class="settings-row">
+      <span data-i18n="about_license">License</span>
+      <strong data-i18n="about_license_value">All Rights Reserved</strong>
+    </div>
+  </div>
+</div>
+
+<div class="about-dev">
+  <img
+    src="assets/images/GanZ-Labs.png"
+    alt="GanZ Labs"
+    class="developer-logo"
+  />
+
+  <p class="developer-name">GanZ Labs</p>
+  <small data-i18n="about_credit">Made with care by GanZ Labs</small>
+  <small class="about-copyright">© 2026 GanZ Labs</small>
+</div>

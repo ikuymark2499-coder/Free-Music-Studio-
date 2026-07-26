@@ -2,6 +2,20 @@
   <h1 data-i18n="title_settings">Settings</h1>
 </div>
 
+<div class="section-title" data-i18n="settings_app" id="install-section-title">App</div>
+<div class="settings-group" id="install-row">
+  <div class="settings-row">
+    <div>
+      <div class="settings-row-label" data-i18n="settings_install">Install app</div>
+      <div class="settings-row-desc" data-i18n="settings_install_desc">Add GooKoo to your home screen for the full app experience</div>
+    </div>
+    <button class="btn btn-primary" id="install-app-btn" data-i18n="settings_install_btn" style="padding:var(--space-2) var(--space-4);font-size:var(--fs-sm)">Install</button>
+  </div>
+  <div class="settings-row-desc is-hidden" id="install-ios-hint" data-i18n="settings_install_ios_hint" style="padding:0 16px 12px">
+    On iPhone/iPad: tap Share, then "Add to Home Screen".
+  </div>
+</div>
+
 <div class="section-title" data-i18n="settings_language">Language</div>
 <div class="settings-group">
   <div class="settings-row">
@@ -56,6 +70,21 @@
     </div>
     <label class="switch">
       <input type="checkbox" id="toggle-showcover" />
+      <span class="switch-track"></span>
+      <span class="switch-thumb"></span>
+    </label>
+  </div>
+</div>
+
+<div class="section-title" data-i18n="settings_sound">Sound</div>
+<div class="settings-group">
+  <div class="settings-row">
+    <div>
+      <div class="settings-row-label" data-i18n="settings_uisound">Tab tap sound</div>
+      <div class="settings-row-desc" data-i18n="settings_uisound_desc">Play a soft tone when switching tabs</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="toggle-uisound" />
       <span class="switch-track"></span>
       <span class="switch-thumb"></span>
     </label>

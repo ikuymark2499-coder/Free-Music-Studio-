@@ -1,5 +1,9 @@
 <div class="app-topbar">
-  <h1 data-i18n="title_library">Library</h1>
+  <img
+  src="assets/images/logo-gookoo.png"
+  alt="GooKoo"
+  class="app-logo"
+/>
   <div style="display:flex;gap:8px;align-items:center">
     <span id="library-count" class="count-pill">0</span>
     <button id="library-add-btn" class="icon-btn is-primary" data-i18n-aria="btn_add_music" aria-label="Add music">
@@ -21,16 +25,11 @@
 </div>
 
 <div class="sort-bar">
-  <label for="library-sort-select" data-i18n="sort_label">Sort</label>
-  <select id="library-sort-select">
-    <option value="newest" data-i18n="sort_newest">Recently added</option>
-    <option value="oldest" data-i18n="sort_oldest">Oldest added</option>
-    <option value="az" data-i18n="sort_az">Title A-Z</option>
-    <option value="za" data-i18n="sort_za">Title Z-A</option>
-    <option value="artist" data-i18n="sort_artist">Artist</option>
-    <option value="album" data-i18n="sort_album">Album</option>
-    <option value="duration" data-i18n="sort_duration">Duration</option>
-  </select>
+  <button id="library-sort-trigger" class="sort-trigger-btn" type="button">
+    <span data-i18n="sort_label">Sort</span>:
+    <span class="sort-trigger-label">Recently added</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
 </div>
 
 <div id="library-empty" class="empty-state hidden">
