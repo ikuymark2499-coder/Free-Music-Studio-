@@ -110,3 +110,70 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Spinner rotation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+  transform-origin: center;
+}
+
+/* ==========================================================================
+   App loading splash — letters wave in one after another (load_1..load_6)
+   ========================================================================== */
+
+@keyframes loaderLetterWave {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50% { transform: translateY(-18px); opacity: 1; }
+}
+
+@keyframes loaderFadeOut {
+  from { opacity: 1; visibility: visible; }
+  to { opacity: 0; visibility: hidden; }
+}
+
+.app-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  background: var(--color-bg);
+  transition: opacity var(--dur-slow) var(--ease-standard);
+}
+
+.app-loader.is-hidden {
+  animation: loaderFadeOut var(--dur-slow) var(--ease-standard) forwards;
+  pointer-events: none;
+}
+
+.loader-word {
+  width: min(72vw, 320px);
+  height: auto;
+  overflow: visible;
+}
+
+.loader-letter {
+  transform-origin: center bottom;
+  transform-box: fill-box;
+  animation: loaderLetterWave 1.2s var(--ease-standard) infinite;
+}
+
+.app-loader-slogan {
+  margin: 0;
+  padding: 0 var(--space-6);
+  max-width: 340px;
+  text-align: center;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--color-text-secondary);
+  animation: fadeIn var(--dur-slow) var(--ease-standard) backwards;
+  animation-delay: 200ms;
+}

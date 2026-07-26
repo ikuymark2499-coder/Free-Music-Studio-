@@ -11,7 +11,7 @@
   .play-btn-lg { width: 58px; height: 58px; }
   .playlist-grid { gap: var(--space-2); }
   .sort-bar { flex-wrap: wrap; justify-content: space-between; }
-  .sort-bar select { max-width: 60vw; }
+  .sort-trigger-btn { max-width: 80vw; }
 }
 
 /* Small phones (~360px) */

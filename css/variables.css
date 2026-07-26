@@ -4,15 +4,16 @@
 
 :root {
   /* Brand colors (fixed spec) */
-  --color-primary: #4F46E5;
-  --color-primary-rgb: 79, 70, 229;
+  --color-primary: #FCC609;
+  --color-primary-rgb: 252, 198, 9;
+  --color-primary-text: #0F216D;
   --color-bg: #0F172A;
   --color-bg-rgb: 15, 23, 42;
   --color-card: #1E293B;
   --color-card-rgb: 30, 41, 59;
   --color-text: #FFFFFF;
-  --color-accent: #22C55E;
-  --color-accent-rgb: 34, 197, 94;
+  --color-accent: #0F216D;
+  --color-accent-rgb: 15, 33, 109;
 
   /* Derived tones */
   --color-bg-elevated: #16213a;
