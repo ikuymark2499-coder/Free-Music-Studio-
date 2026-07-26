@@ -1,14 +1,9 @@
 /* ==========================================================================
-   future/lyrics.js — Scaffold only (not active yet)
+   future/lyrics.js — superseded by js/lyrics.js
    -----------------------------------------------------------------------
-   Plan: add an optional `lyrics` (plain text or LRC-timed) field on the
-   song metadata record in storage.js, editable from the same edit-song
-   modal used for title/artist/album. Synced LRC playback would tap the
-   player's existing "timeupdate" event to highlight the current line —
-   no changes needed to the audio pipeline itself.
+   The synced-lyrics feature (LRCLIB fetch + IndexedDB cache + karaoke
+   scroll UI) is now implemented in js/lyrics.js and wired up in app.js.
+   This file is kept only so no old imports break; use js/lyrics.js instead.
    ========================================================================== */
 
-export function getLyricsForSong(/* song */) {
-  console.info("lyrics: getLyricsForSong() is a scaffold — not implemented yet");
-  return null;
-}
+export { getLyricsForSong } from "../lyrics.js";
