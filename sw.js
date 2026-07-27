@@ -14,7 +14,7 @@
    caches get cleaned up on the next activate.
    ========================================================================== */
 
-const CACHE_NAME = "music-player-shell-v2";
+const CACHE_NAME = "music-player-shell-v3";
 
 const APP_SHELL = [
   "./",
@@ -32,6 +32,7 @@ const APP_SHELL = [
   "./js/search.js",
   "./js/storage.js",
   "./js/player.js",
+  "./js/mediaSession.js",
   "./js/lyrics.js",
   "./js/metadata.js",
   "./js/ui.js",

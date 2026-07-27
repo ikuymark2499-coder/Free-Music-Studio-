@@ -137,10 +137,16 @@
       <div id="fp-lyrics" class="fp-lyrics">
         <div id="fp-lyrics-inner" class="fp-lyrics-inner"></div>
       </div>
+      <div id="fp-lyrics-choice"></div>
+      <div id="fp-lyrics-offset-wrap"></div>
+      <button id="fp-lyrics-offset-toggle-btn" class="fp-lyrics-info-btn fp-lyrics-offset-toggle-btn is-hidden" data-i18n-aria="lyrics_offset_toggle_aria" aria-label="Adjust lyrics timing">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.6V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1-1.6 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.6-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.6-1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H9a1.7 1.7 0 001-1.6V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.6 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.6 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.6 1z"/></svg>
+      </button>
       <button id="fp-lyrics-info-btn" class="fp-lyrics-info-btn is-hidden" data-i18n-aria="lyrics_info_aria" aria-label="Why lyrics may not match">?</button>
       <div id="fp-lyrics-info-popover" class="fp-lyrics-info-popover is-hidden">
         <p id="fp-lyrics-info-text" data-i18n="lyrics_disclaimer">These lyrics were matched automatically by song title, so they may be from a different version or artist than what you're hearing.</p>
         <p id="fp-lyrics-matched-info" class="fp-lyrics-matched-info"></p>
+        <button id="fp-lyrics-rechoose-btn" class="btn btn-ghost btn-block" style="margin-top:8px" data-i18n="lyrics_rechoose">Choose different lyrics</button>
       </div>
     </div>
 
@@ -162,6 +168,17 @@
 
     <div class="fp-bottom-actions">
       <button id="fp-favorite-btn" data-i18n-aria="btn_favorite" aria-label="Favorite"></button>
+    </div>
+  </div>
+
+  <!-- ============ Lyrics picker sheet ============ -->
+  <div id="lyrics-picker-sheet" class="sheet-overlay">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div id="lyrics-picker-title" class="sheet-title">—</div>
+      <p class="lyrics-picker-hint" data-i18n="lyrics_picker_hint">Pick the version that matches what you're hearing.</p>
+      <div id="lyrics-picker-list" class="song-list"></div>
+      <button id="lyrics-picker-close" class="btn btn-ghost btn-block" style="margin-top:16px" data-i18n="btn_cancel">Cancel</button>
     </div>
   </div>
 
