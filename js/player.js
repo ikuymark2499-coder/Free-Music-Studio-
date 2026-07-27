@@ -3,8 +3,8 @@
    -----------------------------------------------------------------------
    Two playback backends behind one public API:
      - source: "local"   -> plays through the existing <audio> element
-     - source: "youtube" -> plays through a hidden (0x0) YouTube IFrame
-                             Player, loaded lazily on first use
+     - source: "youtube" -> plays through a hidden (1x1, off-screen)
+                             YouTube IFrame Player, loaded lazily on first use
 
    app.js / ui components never need to know which backend is active —
    they call play()/pause()/seek()/setVolume()/next()/previous() and listen
@@ -223,10 +223,18 @@ class PlayerEngine extends EventTarget {
     if (!container) {
       container = document.createElement("div");
       container.id = YT_CONTAINER_ID;
-      // Hidden per spec: 0x0, no visible video, audio only.
+      // Kept at 1x1 and moved off-screen (never 0x0 / display:none / visibility:hidden).
+      // Some browsers treat a truly zero-size or hidden video element as
+      // "not actually playing" and throttle/stop its audio once the tab is
+      // backgrounded or the screen locks. A 1x1 box that's merely
+      // positioned off the visible viewport keeps the element "on screen"
+      // as far as that logic is concerned, so background/lock-screen
+      // playback (via Media Session) keeps working.
       container.style.position = "fixed";
-      container.style.width = "0px";
-      container.style.height = "0px";
+      container.style.left = "-9999px";
+      container.style.top = "-9999px";
+      container.style.width = "1px";
+      container.style.height = "1px";
       container.style.overflow = "hidden";
       container.style.pointerEvents = "none";
       document.body.appendChild(container);
@@ -243,8 +251,8 @@ class PlayerEngine extends EventTarget {
     this._ytPlayerInitPromise = new Promise((resolve, reject) => {
       try {
         this.ytPlayer = new window.YT.Player(YT_CONTAINER_ID, {
-          width: "0",
-          height: "0",
+          width: "1",
+          height: "1",
           playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, playsinline: 1 },
           events: {
             onReady: () => {

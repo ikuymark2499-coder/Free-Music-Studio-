@@ -148,6 +148,19 @@ function isLikelyBadArtist(artistName) {
   return badHints.some((hint) => a.includes(hint));
 }
 
+/**
+ * Loose signal only (requirement: "may help guessing, must never be the
+ * main rule"). A handful of well-known label/channel suffixes that tend to
+ * mean the channelTitle is *also* a decent artist-name guess. This never
+ * filters anything out — it only adds a small nudge in scoreCandidate().
+ */
+function isLikelyTrustedChannel(channelTitle) {
+  const c = normalizeForMatch(channelTitle);
+  if (!c) return false;
+  const trustedHints = ["records", "music", "entertainment", "official", "label", "vevo"];
+  return trustedHints.some((hint) => c.includes(hint));
+}
+
 function splitTitleGuess(rawTitle) {
   const cleaned = cleanTrackTitle(rawTitle);
   if (!cleaned) return [];
@@ -525,6 +538,116 @@ function pickBestCandidate(candidates, queryVariants) {
   }
 
   return best;
+}
+
+// ---------------------------------------------------------------------------
+// User-driven lyrics selection (picker) API
+// ---------------------------------------------------------------------------
+
+/**
+ * Stable identity for "this specific song version" — this is the key the
+ * user's manual lyrics choice + offset get saved under (storage.js).
+ * YouTube songs key on videoId (per the requirement); local files fall back
+ * to their content fingerprint (or id) since there's no videoId.
+ */
+export function computeMatchKey(song) {
+  if (!song) return null;
+  if (song.source === "youtube" && song.videoId) return `yt:${song.videoId}`;
+  return `local:${song.fingerprint || song.id}`;
+}
+
+/**
+ * Fetch a specific LRCLIB record by its numeric id — used to instantly
+ * re-fetch lyrics content for a match the user already chose before,
+ * without repeating the search.
+ */
+export async function fetchLyricsById(lyricsId) {
+  if (lyricsId === null || lyricsId === undefined) return null;
+  const url = `${LRCLIB_GET_ENDPOINT}/${encodeURIComponent(lyricsId)}`;
+  const result = await fetchJsonWithRetry(url);
+  if (!result || !(result.syncedLyrics || result.plainLyrics)) return null;
+  return candidateToRecord(result);
+}
+
+function candidateToRecord(candidate) {
+  if (candidate.syncedLyrics) {
+    return {
+      status: "synced",
+      lines: parseLRC(candidate.syncedLyrics),
+      plainText: candidate.plainLyrics || "",
+      matchedTrackName: candidate.trackName || "",
+      matchedArtistName: candidate.artistName || "",
+    };
+  }
+  if (candidate.plainLyrics) {
+    return {
+      status: "plain",
+      lines: [],
+      plainText: candidate.plainLyrics,
+      matchedTrackName: candidate.trackName || "",
+      matchedArtistName: candidate.artistName || "",
+    };
+  }
+  return { status: "none", lines: [], plainText: "", matchedTrackName: "", matchedArtistName: "" };
+}
+
+/**
+ * Search LRCLIB for every plausible candidate for this song and return a
+ * ranked, deduplicated, UI-friendly summary list — this is what the picker
+ * sheet renders as tappable options. Nothing here is auto-applied; the
+ * caller (app.js) always lets the person confirm, even for a single hit.
+ *
+ * Returns: Array<{
+ *   lyricsId, trackName, artistName, albumName, duration,
+ *   hasSynced, hasPlain, score
+ * }>, sorted best-first, capped at 8 entries.
+ */
+export async function searchLyricsCandidates(song, maxResults = 8) {
+  if (!song) return [];
+
+  const queryVariants = buildQueryVariants(song);
+  const primaryQuery = queryVariants[0] || { trackName: song.title || "", artistName: song.artist || "" };
+  const trustedChannel = song.source === "youtube" && isLikelyTrustedChannel(song.artist);
+
+  const allCandidates = [];
+  try {
+    for (const q of queryVariants) {
+      if (!q.trackName) continue;
+      const results = await fetchFromLRCLibSearch(q);
+      if (Array.isArray(results) && results.length) allCandidates.push(...results);
+      // Enough raw material already — searching every variant is wasteful
+      // and this flow is not meant to lean on heavy API usage.
+      if (allCandidates.length >= 25) break;
+    }
+  } catch (err) {
+    console.error("lyrics: candidate search failed", err);
+  }
+
+  const deduped = dedupeCandidates(allCandidates).filter(
+    (c) => c && c.id != null && (c.syncedLyrics || c.plainLyrics)
+  );
+
+  const ranked = deduped
+    .map((c) => {
+      let score = scoreCandidate(c, primaryQuery);
+      // Small nudge only — never a hard filter (requirement #10/#11).
+      if (trustedChannel) score += 5;
+      return { candidate: c, score };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults)
+    .map(({ candidate, score }) => ({
+      lyricsId: candidate.id,
+      trackName: candidate.trackName || "",
+      artistName: candidate.artistName || "",
+      albumName: candidate.albumName || "",
+      duration: parseCandidateDuration(candidate),
+      hasSynced: !!candidate.syncedLyrics,
+      hasPlain: !!candidate.plainLyrics,
+      score,
+    }));
+
+  return ranked;
 }
 
 // ---------------------------------------------------------------------------

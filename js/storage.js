@@ -20,7 +20,7 @@
    ========================================================================== */
 
 const DB_NAME = "musicPlayerDB";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 const STORES = {
   SONGS: "songs",
@@ -29,6 +29,9 @@ const STORES = {
   PLAYLISTS: "playlists",
   KV: "kv",
   LYRICS: "lyricsCache",
+  // v3: user-driven lyrics selection (see design notes in lyrics.js)
+  LYRICS_CHOICES: "lyricsChoices", // matchKey -> which lyricsId the user picked (+ offset)
+  LYRICS_CONTENT: "lyricsContent", // lyricsId -> actual fetched lyrics text (shared across songs)
 };
 
 const LS_KEYS = {
@@ -86,6 +89,12 @@ function openDB() {
       }
       if (!db.objectStoreNames.contains(STORES.LYRICS)) {
         db.createObjectStore(STORES.LYRICS, { keyPath: "songId" });
+      }
+      if (!db.objectStoreNames.contains(STORES.LYRICS_CHOICES)) {
+        db.createObjectStore(STORES.LYRICS_CHOICES, { keyPath: "matchKey" });
+      }
+      if (!db.objectStoreNames.contains(STORES.LYRICS_CONTENT)) {
+        db.createObjectStore(STORES.LYRICS_CONTENT, { keyPath: "lyricsId" });
       }
     };
 
@@ -506,6 +515,88 @@ export async function deleteCachedLyrics(songId) {
     await idbDelete(STORES.LYRICS, songId);
   } catch (err) {
     console.error("storage: failed to delete lyrics cache", err);
+  }
+}
+
+/* ---------- Lyrics selection (user-picked match, keyed by matchKey) ----
+ * matchKey identifies "this specific song version" — see
+ * lyrics.js::computeMatchKey() for how it's built (videoId for YouTube,
+ * fingerprint for local files). One matchKey -> one chosen lyricsId
+ * (LRCLIB record id) + a manual timing offset, so re-opening the same
+ * video/file next time skips search entirely.
+ *
+ * Shape: { matchKey, lyricsId, status, trackName, artistName,
+ *          offsetSec, updatedAt }
+ * lyricsId === null means "user explicitly chose: no lyrics".
+ * ------------------------------------------------------------------- */
+export async function getLyricsChoice(matchKey) {
+  if (!matchKey) return null;
+  try {
+    const record = await idbGet(STORES.LYRICS_CHOICES, matchKey);
+    return record || null;
+  } catch (err) {
+    console.error("storage: failed to read lyrics choice", err);
+    return null;
+  }
+}
+
+export async function saveLyricsChoice(matchKey, data) {
+  if (!matchKey) return null;
+  const record = {
+    matchKey,
+    lyricsId: data?.lyricsId ?? null,
+    status: data?.status || "none",
+    trackName: data?.trackName || "",
+    artistName: data?.artistName || "",
+    offsetSec: typeof data?.offsetSec === "number" ? data.offsetSec : 0,
+    updatedAt: Date.now(),
+  };
+  try {
+    await idbPut(STORES.LYRICS_CHOICES, record);
+  } catch (err) {
+    console.error("storage: failed to save lyrics choice", err);
+  }
+  return record;
+}
+
+/** Patch just the offset for an already-chosen match (speed/offset control). */
+export async function saveLyricsOffset(matchKey, offsetSec) {
+  const existing = await getLyricsChoice(matchKey);
+  if (!existing) return null; // offset only makes sense after a choice exists
+  return saveLyricsChoice(matchKey, { ...existing, offsetSec });
+}
+
+export async function deleteLyricsChoice(matchKey) {
+  if (!matchKey) return;
+  try {
+    await idbDelete(STORES.LYRICS_CHOICES, matchKey);
+  } catch (err) {
+    console.error("storage: failed to delete lyrics choice", err);
+  }
+}
+
+/* ---------- Lyrics content cache (keyed by LRCLIB lyricsId, shared) -----
+ * Many videoIds/files can point at the same lyricsId (same song, many
+ * uploads), so the actual lyrics text is cached separately from the
+ * per-song choice above and reused across all of them.
+ * ------------------------------------------------------------------- */
+export async function getLyricsContent(lyricsId) {
+  if (lyricsId === null || lyricsId === undefined) return null;
+  try {
+    const record = await idbGet(STORES.LYRICS_CONTENT, lyricsId);
+    return record || null;
+  } catch (err) {
+    console.error("storage: failed to read lyrics content", err);
+    return null;
+  }
+}
+
+export async function saveLyricsContent(lyricsId, data) {
+  if (lyricsId === null || lyricsId === undefined) return;
+  try {
+    await idbPut(STORES.LYRICS_CONTENT, { lyricsId, cachedAt: Date.now(), ...data });
+  } catch (err) {
+    console.error("storage: failed to save lyrics content", err);
   }
 }
 

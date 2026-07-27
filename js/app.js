@@ -8,11 +8,24 @@ import { initSettingsSystem, initSettingsPage } from "./settings.js";
 import { initLibraryPage, getAllSongs, getSongById, updateSong, deleteSong, songItemHTML } from "./library.js";
 import { initPlaylistPage, getPlaylists, addSongToPlaylist, createPlaylist } from "./playlist.js";
 import { initSearchPage } from "./search.js";
-import { initStorage, getFavorites, saveFavorites, getLastPage, saveLastPage } from "./storage.js";
+import {
+  initStorage,
+  getFavorites,
+  saveFavorites,
+  getLastPage,
+  saveLastPage,
+  getLyricsChoice,
+  saveLyricsChoice,
+  saveLyricsOffset,
+  getLyricsContent,
+  saveLyricsContent,
+} from "./storage.js";
 import { player } from "./player.js";
-import { getLyricsForSong, findActiveLineIndex } from "./lyrics.js";
+import { computeMatchKey, searchLyricsCandidates, fetchLyricsById, findActiveLineIndex } from "./lyrics.js";
+import { initLyricsPicker, openLyricsPickerSheet, choicePromptHTML, offsetControlHTML, bindOffsetControl } from "./lyricsPicker.js";
 import { playUISound } from "./ui-sound.js";
 import { registerServiceWorker, initInstallPrompt, onUpdateReady, applyUpdate } from "./future/pwa.js";
+import { initMediaSession } from "./mediaSession.js";
 import {
   icon,
   showToast,
@@ -266,6 +279,10 @@ const fpLyricsInner = document.getElementById("fp-lyrics-inner");
 const fpLyricsInfoBtn = document.getElementById("fp-lyrics-info-btn");
 const fpLyricsInfoPopover = document.getElementById("fp-lyrics-info-popover");
 const fpLyricsMatchedInfo = document.getElementById("fp-lyrics-matched-info");
+const fpLyricsChoice = document.getElementById("fp-lyrics-choice");
+const fpLyricsOffsetWrap = document.getElementById("fp-lyrics-offset-wrap");
+const fpLyricsOffsetToggleBtn = document.getElementById("fp-lyrics-offset-toggle-btn");
+const fpLyricsRechooseBtn = document.getElementById("fp-lyrics-rechoose-btn");
 const queueSheet = document.getElementById("queue-sheet");
 
 
@@ -327,7 +344,13 @@ function syncFullPlayerFavoriteButton() {
 
 let currentLyrics = { status: "none", lines: [] };
 let currentLyricsSongId = null;
+let currentMatchKey = null;
+let currentOffsetSec = 0;
+let offsetPanelOpen = false;
 let activeLyricsLineIndex = -1;
+
+/* AI is never in this loop by design: matching is title/artist heuristics
+   (lyrics.js) plus the user's own confirmation, never a model guess. */
 
 function renderLyrics(result) {
   if (!fpLyricsInner) return;
@@ -341,14 +364,13 @@ function renderLyrics(result) {
     fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_none")}</div>`;
   }
   updateLyricsInfoDisclosure(result);
+  renderOffsetControl(result);
 }
 
 /**
  * Show a small "?" next to the lyrics whenever we actually have lyrics on
- * screen, since they were matched automatically by title and may belong
- * to a different version/artist than what's playing. Tapping it reveals
- * a short explanation plus (when available) what track/artist the lyrics
- * were actually matched to, so the person can judge for themselves.
+ * screen, plus a "choose different lyrics" action, since even a
+ * user-confirmed match can turn out wrong later.
  */
 function updateLyricsInfoDisclosure(result) {
   if (!fpLyricsInfoBtn) return;
@@ -374,6 +396,80 @@ function hideLyricsInfoPopover() {
   fpLyricsInfoPopover?.classList.add("is-hidden");
 }
 
+/* Offset control only ever exists once a real (non-"none") choice exists —
+   adjusting timing before there's anything timed to adjust makes no sense.
+   Even then it stays collapsed behind the gear button until tapped, so it
+   doesn't sit in the way while just reading lyrics. */
+function renderOffsetControl(result) {
+  if (!fpLyricsOffsetWrap) return;
+
+  const eligible = result.status === "synced" && !!currentMatchKey;
+  fpLyricsOffsetToggleBtn?.classList.toggle("is-hidden", !eligible);
+  fpLyricsOffsetToggleBtn?.classList.toggle("is-active", eligible && offsetPanelOpen);
+
+  if (!eligible || !offsetPanelOpen) {
+    fpLyricsOffsetWrap.innerHTML = "";
+    return;
+  }
+
+  fpLyricsOffsetWrap.innerHTML = offsetControlHTML(currentOffsetSec);
+  bindOffsetControl(fpLyricsOffsetWrap, currentOffsetSec, async (nextOffsetSec) => {
+    currentOffsetSec = nextOffsetSec;
+    renderOffsetControl(result); // re-render immediately, don't wait on the write
+    await saveLyricsOffset(currentMatchKey, nextOffsetSec);
+  });
+}
+
+fpLyricsOffsetToggleBtn?.addEventListener("click", () => {
+  offsetPanelOpen = !offsetPanelOpen;
+  renderOffsetControl(currentLyrics);
+});
+
+/** Resolve a chosen candidate/lyricsId into renderable {status,lines,plainText,...}. */
+async function loadContentForChoice(lyricsId) {
+  if (lyricsId === null || lyricsId === undefined) {
+    return { status: "none", lines: [], plainText: "", matchedTrackName: "", matchedArtistName: "" };
+  }
+  const cached = await getLyricsContent(lyricsId);
+  if (cached) return cached;
+
+  const fetched = await fetchLyricsById(lyricsId);
+  const record = fetched || { status: "none", lines: [], plainText: "", matchedTrackName: "", matchedArtistName: "" };
+  await saveLyricsContent(lyricsId, record);
+  return record;
+}
+
+/**
+ * Run the search + open the picker sheet, save whatever the person
+ * confirms (including "no lyrics"), and return the renderable result.
+ * Always shows the sheet, even for exactly one candidate.
+ */
+async function promptUserToChooseLyrics(song, matchKey) {
+  const candidates = await searchLyricsCandidates(song);
+
+  // Cancelled without choosing anything: don't save a choice, so the
+  // prompt reappears next time instead of silently defaulting to "none".
+  const picked = await openLyricsPickerSheet(song, candidates);
+  if (picked === undefined) {
+    return { status: "none", lines: [], plainText: "", matchedTrackName: "", matchedArtistName: "" };
+  }
+
+  if (picked === null) {
+    await saveLyricsChoice(matchKey, { lyricsId: null, status: "none" });
+    return { status: "none", lines: [], plainText: "", matchedTrackName: "", matchedArtistName: "" };
+  }
+
+  const content = await loadContentForChoice(picked.lyricsId);
+  await saveLyricsChoice(matchKey, {
+    lyricsId: picked.lyricsId,
+    status: content.status,
+    trackName: picked.trackName,
+    artistName: picked.artistName,
+    offsetSec: 0,
+  });
+  return content;
+}
+
 async function loadLyricsForCurrentSong() {
   const song = player.currentSong;
   if (!fpLyricsInner) return;
@@ -381,29 +477,85 @@ async function loadLyricsForCurrentSong() {
   if (!song) {
     currentLyrics = { status: "none", lines: [] };
     currentLyricsSongId = null;
+    currentMatchKey = null;
+    currentOffsetSec = 0;
+    offsetPanelOpen = false;
     activeLyricsLineIndex = -1;
     fpLyricsInner.innerHTML = "";
+    if (fpLyricsChoice) fpLyricsChoice.innerHTML = "";
+    if (fpLyricsOffsetWrap) fpLyricsOffsetWrap.innerHTML = "";
+    fpLyricsOffsetToggleBtn?.classList.add("is-hidden");
     return;
   }
 
   currentLyricsSongId = song.id;
+  currentMatchKey = computeMatchKey(song);
+  currentOffsetSec = 0;
+  offsetPanelOpen = false;
   activeLyricsLineIndex = -1;
   fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_loading")}</div>`;
   fpLyricsInfoBtn?.classList.add("is-hidden");
+  fpLyricsOffsetToggleBtn?.classList.add("is-hidden");
   hideLyricsInfoPopover();
+  if (fpLyricsChoice) fpLyricsChoice.innerHTML = "";
+  if (fpLyricsOffsetWrap) fpLyricsOffsetWrap.innerHTML = "";
 
-  const result = await getLyricsForSong(song);
+  const isStillCurrent = () => player.currentSong && player.currentSong.id === currentLyricsSongId;
 
-  // The user may have skipped to another song while this was in flight.
-  if (!player.currentSong || player.currentSong.id !== currentLyricsSongId) return;
+  // 1) A choice was already made for this exact video/file before — reuse
+  //    it directly, no searching, no picker.
+  const saved = await getLyricsChoice(currentMatchKey);
+  if (!isStillCurrent()) return;
 
-  currentLyrics = result;
-  renderLyrics(result);
+  if (saved) {
+    currentOffsetSec = saved.offsetSec || 0;
+    const content = await loadContentForChoice(saved.lyricsId);
+    if (!isStillCurrent()) return;
+    currentLyrics = { ...content, matchedTrackName: saved.trackName, matchedArtistName: saved.artistName };
+    renderLyrics(currentLyrics);
+    return;
+  }
+
+  // 2) Nothing saved yet: search, then let the person confirm — never
+  //    auto-apply a guess, not even when there's only one hit.
+  fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_searching")}</div>`;
+  const candidates = await searchLyricsCandidates(song);
+  if (!isStillCurrent()) return;
+
+  fpLyricsInner.innerHTML = `<div class="fp-lyrics-empty">${t("lyrics_not_chosen_yet")}</div>`;
+  if (fpLyricsChoice) {
+    fpLyricsChoice.innerHTML = choicePromptHTML(candidates.length);
+    document.getElementById("fp-lyrics-choose-btn")?.addEventListener("click", async () => {
+      const content = await promptUserToChooseLyrics(song, currentMatchKey);
+      if (!isStillCurrent()) return;
+      currentLyrics = content;
+      currentOffsetSec = 0;
+      if (fpLyricsChoice) fpLyricsChoice.innerHTML = content.status === "none" ? choicePromptHTML(candidates.length) : "";
+      renderLyrics(content);
+    });
+  }
 }
+
+/** "Choose different lyrics" from the info popover: re-search + re-pick,
+    overwriting whatever mapping was saved for this matchKey before. */
+async function rechooseLyricsForCurrentSong() {
+  const song = player.currentSong;
+  if (!song || !currentMatchKey) return;
+  hideLyricsInfoPopover();
+  const content = await promptUserToChooseLyrics(song, currentMatchKey);
+  if (!player.currentSong || player.currentSong.id !== currentLyricsSongId) return;
+  currentLyrics = content;
+  currentOffsetSec = 0;
+  if (fpLyricsChoice) fpLyricsChoice.innerHTML = content.status === "none" ? choicePromptHTML(0) : "";
+  renderLyrics(content);
+}
+
+fpLyricsRechooseBtn?.addEventListener("click", rechooseLyricsForCurrentSong);
 
 function updateLyricsHighlight(currentTime) {
   if (currentLyrics.status !== "synced" || !currentLyrics.lines.length) return;
-  const index = findActiveLineIndex(currentLyrics.lines, currentTime);
+  const adjustedTime = currentTime + currentOffsetSec;
+  const index = findActiveLineIndex(currentLyrics.lines, adjustedTime);
   if (index === activeLyricsLineIndex) return;
   activeLyricsLineIndex = index;
 
@@ -609,6 +761,7 @@ async function bootstrap() {
 
   registerServiceWorker();
   initInstallPrompt();
+  initMediaSession(player);
   onUpdateReady((registration) => {
     showToast(t("pwa_update_ready"));
     // Give the toast a moment to be seen, then swap in the new version.
@@ -616,6 +769,7 @@ async function bootstrap() {
   });
 
   initSettingsSystem();
+  initLyricsPicker();
   await initLanguage();
   applyTranslations(document);
   showRandomLoaderSlogan();
