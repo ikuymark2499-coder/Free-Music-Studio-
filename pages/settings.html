@@ -9,10 +9,16 @@
       <div class="settings-row-label" data-i18n="settings_install">Install app</div>
       <div class="settings-row-desc" data-i18n="settings_install_desc">Add GooKoo to your home screen for the full app experience</div>
     </div>
-    <button class="btn btn-primary" id="install-app-btn" data-i18n="settings_install_btn" style="padding:var(--space-2) var(--space-4);font-size:var(--fs-sm)">Install</button>
+    <div class="settings-row-actions" style="display:flex;gap:var(--space-2);flex-wrap:wrap;justify-content:flex-end">
+      <button class="btn btn-primary" id="install-app-btn" data-i18n="settings_install_btn" style="padding:var(--space-2) var(--space-4);font-size:var(--fs-sm)">Install</button>
+      <a class="btn btn-primary" id="download-apk-btn" href="assets/downloads/GooKoo.apk" download="GooKoo.apk" data-i18n="settings_download_apk_btn" style="padding:var(--space-2) var(--space-4);font-size:var(--fs-sm)">Download APK</a>
+    </div>
   </div>
   <div class="settings-row-desc is-hidden" id="install-ios-hint" data-i18n="settings_install_ios_hint" style="padding:0 16px 12px">
     On iPhone/iPad: tap Share, then "Add to Home Screen".
+  </div>
+  <div class="settings-row-desc is-hidden" id="apk-fallback-hint" data-i18n="settings_download_apk_hint" style="padding:0 16px 12px">
+    Before installing, allow "Install unknown apps" for your browser in Android settings.
   </div>
 </div>
 
