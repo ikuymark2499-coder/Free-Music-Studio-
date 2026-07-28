@@ -18,8 +18,18 @@ import { showToast } from "../ui.js";
 import { t } from "../language.js";
 
 let deferredInstallPrompt = null;
-let onInstallabilityChange = null;
 let updateReadyCallback = null;
+
+// Multiple UI rows (native install row, APK fallback row, ...) all need to
+// re-render whenever installability changes. Kept as a simple listener list
+// so bindInstallRow and bindApkFallbackRow can both subscribe without
+// stepping on each other — no new event system, just a small fan-out on top
+// of the existing beforeinstallprompt/appinstalled wiring below.
+const installabilityListeners = [];
+
+function notifyInstallabilityChange(canInstall) {
+  installabilityListeners.forEach((listener) => listener(canInstall));
+}
 
 /* ---------------------------------------------------------------------- */
 /* Service worker registration                                            */
@@ -84,12 +94,12 @@ export function initInstallPrompt() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     deferredInstallPrompt = event;
-    onInstallabilityChange?.(true);
+    notifyInstallabilityChange(true);
   });
 
   window.addEventListener("appinstalled", () => {
     deferredInstallPrompt = null;
-    onInstallabilityChange?.(false);
+    notifyInstallabilityChange(false);
     showToast(t("pwa_install_success") || "Installed! Find it on your home screen.");
   });
 }
@@ -116,7 +126,7 @@ export async function promptInstall() {
   deferredInstallPrompt.prompt();
   const { outcome } = await deferredInstallPrompt.userChoice;
   deferredInstallPrompt = null;
-  onInstallabilityChange?.(false);
+  notifyInstallabilityChange(false);
   return outcome;
 }
 
@@ -141,7 +151,7 @@ export function bindInstallRow({ row, button, iosHint }) {
     row?.classList.add("is-hidden");
   }
 
-  onInstallabilityChange = render;
+  installabilityListeners.push(render);
   render();
 
   button?.addEventListener("click", async () => {
@@ -151,4 +161,43 @@ export function bindInstallRow({ row, button, iosHint }) {
     }
     await promptInstall();
   });
+}
+
+/* ---------------------------------------------------------------------- */
+/* APK fallback (Android browsers that don't support beforeinstallprompt) */
+/* ---------------------------------------------------------------------- */
+
+/** True whenever downloading the APK makes sense as an option: the app
+ *  isn't already installed/standalone, and it's not iOS (no APK exists for
+ *  iOS — that platform uses its own Share -> "Add to Home Screen" flow
+ *  instead). Unlike the native install button, this does NOT depend on
+ *  isInstallable() — it stays available even when the PWA install prompt
+ *  also works, so people who specifically want the APK can still get it;
+ *  the two options are meant to sit side by side. */
+export function shouldShowApkFallback() {
+  return !isStandalone() && !isIOS();
+}
+
+/** Wire up the "Download APK" settings row: shows/hides it based on
+ *  shouldShowApkFallback(), re-checking on every installability change so it
+ *  stays in sync with the native install row (e.g. hides itself once the
+ *  app is actually installed). */
+export function bindApkFallbackRow({ row, hint }) {
+  function render() {
+    const show = shouldShowApkFallback();
+    row?.classList.toggle("is-hidden", !show);
+    hint?.classList.toggle("is-hidden", !show);
+  }
+
+  installabilityListeners.push(render);
+  render();
+}
+
+/** Register an extra callback to re-run whenever installability changes
+ *  (beforeinstallprompt fires, appinstalled fires, promptInstall resolves).
+ *  Lets callers keep other bits of UI (e.g. a shared section wrapper) in
+ *  sync without duplicating the install/appinstalled listeners themselves. */
+export function onInstallabilityChange(callback) {
+  installabilityListeners.push(callback);
+  callback();
 }
