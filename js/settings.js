@@ -6,7 +6,7 @@ import { getSettings, saveSettings } from "./storage.js";
 import { setLanguage, getCurrentLanguage, t } from "./language.js";
 import { showToast } from "./ui.js";
 import { playUISound, setUISoundEnabled, getUISoundEnabled } from "./ui-sound.js";
-import { bindInstallRow } from "./future/pwa.js";
+import { bindInstallRow, bindApkFallbackRow, isStandalone, onInstallabilityChange } from "./future/pwa.js";
 
 const mediaQueryDark = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -105,9 +105,22 @@ export function initSettingsPage(container) {
   syncThemeButtons();
   syncLanguageButtons();
 
+  const appSection = container.querySelector("#install-row");
+
   bindInstallRow({
-    row: container.querySelector("#install-row"),
+    row: container.querySelector("#install-app-btn"),
     button: container.querySelector("#install-app-btn"),
     iosHint: container.querySelector("#install-ios-hint"),
+  });
+
+  bindApkFallbackRow({
+    row: container.querySelector("#download-apk-btn"),
+    hint: container.querySelector("#apk-fallback-hint"),
+  });
+
+  // Once the app is actually installed (standalone), neither the install
+  // button nor the APK download makes sense — hide the whole "App" section.
+  onInstallabilityChange(() => {
+    appSection?.classList.toggle("is-hidden", isStandalone());
   });
 }
